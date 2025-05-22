@@ -32,7 +32,6 @@ export class TouchManager {
         let pos = this.gameBoard.gridNode.getComponent(UITransform).convertToNodeSpaceAR(new Vec3(p.x, p.y, 1));
         let node = this.checkClickOnBlock(pos);
         if (node) {
-            console.log("touch start");
             this.curTwo = [node];
         }
     }
@@ -41,7 +40,7 @@ export class TouchManager {
         if (!this.isStartTouch || this.isStartChange || this.gameState.isWinState()) return;
         let p = event.getUILocation();
         let pos = this.gameBoard.gridNode.getComponent(UITransform).convertToNodeSpaceAR(new Vec3(p.x, p.y, 1));
-        let node = this.checkClickOnBlock(v3(pos.x, pos.y, 0));
+        let node = this.checkClickOnBlock(pos);
         if (node && gameLogic.isNeighbor(node, this.curTwo[0])) {
             node.setSelected(true);
             this.curTwo.push(node);
@@ -50,9 +49,19 @@ export class TouchManager {
         }
     }
 
-    onTouchEnd() {
+    async onTouchEnd(event: EventTouch) {
+        if (this.isStartChange) return;
+        if (!this.isStartTouch) return;
+        let p = event.getUILocation();
+        let pos = this.gameBoard.gridNode.getComponent(UITransform).convertToNodeSpaceAR(new Vec3(p.x, p.y, 1));
+        let bc = this.checkClickOnBlock(pos);
+        /** 点到炸弹 */
+        if (bc && (this.bombManager.isBomb(bc)) && this.curTwo.length == 1) {
+            await this.bombManager.handleBomb(bc);
+        }
         this.isStartTouch = false;
-        this.curTwo = [];
+        this.isStartChange = false;
+        this.resetSelected();
     }
 
     private checkClickOnBlock(pos: Vec3): gridCmpt | null {
@@ -64,43 +73,43 @@ export class TouchManager {
                (Math.abs(block1.v - block2.v) == 1 && block1.h == block2.h);
     }
 
-    private async swapBlocks(block1: gridCmpt, block2: gridCmpt) {
-        this.isStartChange = true;
-        let tempH = block1.h;
-        let tempV = block1.v;
-        let tempType = block1.type;
+    // private async swapBlocks(block1: gridCmpt, block2: gridCmpt) {
+    //     this.isStartChange = true;
+    //     let tempH = block1.h;
+    //     let tempV = block1.v;
+    //     let tempType = block1.type;
+    //
+    //     block1.setType(block2.type);
+    //     block2.setType(tempType);
+    //
+    //     this.gameBoard.getBlockArr()[block1.h][block1.v] = block2.node;
+    //     this.gameBoard.getBlockArr()[block2.h][block2.v] = block1.node;
+    //
+    //     block1.h = block2.h;
+    //     block1.v = block2.v;
+    //     block2.h = tempH;
+    //     block2.v = tempV;
+    //
+    //     await this.checkAndHandleMatches();
+    //     this.isStartChange = false;
+    // }
 
-        block1.setType(block2.type);
-        block2.setType(tempType);
-
-        this.gameBoard.getBlockArr()[block1.h][block1.v] = block2.node;
-        this.gameBoard.getBlockArr()[block2.h][block2.v] = block1.node;
-
-        block1.h = block2.h;
-        block1.v = block2.v;
-        block2.h = tempH;
-        block2.v = tempV;
-
-        await this.checkAndHandleMatches();
-        this.isStartChange = false;
-    }
-
-    private async checkAndHandleMatches() {
-        let matches = this.gameBoard.findMatches();
-        if (matches.length > 0) {
-            this.gameState.decrementStepCount();
-            for (let match of matches) {
-                await this.bombManager.handleBomb(match);
-            }
-            await this.gameBoard.fillEmptySpaces();
-            await this.checkAndHandleMatches();
-        } else {
-            // Swap back if no matches
-            if (this.curTwo.length == 2) {
-                await this.swapBlocks(this.curTwo[0], this.curTwo[1]);
-            }
-        }
-    }
+    // private async checkAndHandleMatches() {
+    //     let matches = this.gameBoard.findMatches();
+    //     if (matches.length > 0) {
+    //         this.gameState.decrementStepCount();
+    //         for (let match of matches) {
+    //             await this.bombManager.handleBomb(match);
+    //         }
+    //         await this.gameBoard.fillEmptySpaces();
+    //         await this.checkAndHandleMatches();
+    //     } else {
+    //         // Swap back if no matches
+    //         if (this.curTwo.length == 2) {
+    //             await this.swapBlocks(this.curTwo[0], this.curTwo[1]);
+    //         }
+    //     }
+    // }
 
     async startChangeCurTwoPos(isBack: boolean = false) {
         let time = Constants.changeTime;
@@ -110,14 +119,16 @@ export class TouchManager {
         tween(one.node).to(time, { position: this.gameBoard.blockPosArr[two.h][two.v] }).start();
         tween(two.node).to(time, { position: this.gameBoard.blockPosArr[one.h][one.v] }).call(async () => {
             if (!isBack) {
+
                 this.gameBoard.changeData(one, two);
                 // destroy special block if interract
 
                 if (this.bombManager.isBomb(one) && this.bombManager.isBomb(two)) {
                     await this.bombManager.handleComboBomb(one, two);
-                    await this.gameBoard.checkAgain();
+                    this.gameBoard.checkAgain();
                     return;
                 }
+
                 let isbomb1 = await this.bombManager.handleBomb(one);
                 let isbomb2 = await this.bombManager.handleBomb(two);
                 // check if match exist
@@ -131,8 +142,8 @@ export class TouchManager {
                     await this.gameBoard.checkAgain()
                 }
                 else {
-                    console.log(this.curTwo);
-                    await this.startChangeCurTwoPos(true);
+
+                    this.startChangeCurTwoPos(true);
                 }
             }
             else {

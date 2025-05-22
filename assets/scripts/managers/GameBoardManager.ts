@@ -1,13 +1,11 @@
-import {_decorator, Node, v3, Vec3, instantiate, Prefab, tween, isValid} from 'cc';
-import {Bomb, Constants, Pieces} from '../enumConst';
+import {Node, v3, Vec3, instantiate, Prefab, tween, isValid} from 'cc';
+import {Bomb, Constants} from '../enumConst';
 import {gridCmpt} from '../item/gridCmpt';
 import {CocosHelper} from '../components/cocosHelper';
 import {gameLogic} from '../gameLogic';
 import {goalComponent} from "db://assets/scripts/components/goalComponent";
-import {TouchManager} from "db://assets/scripts/managers/TouchManager";
 import {GameViewCmpt} from "db://assets/scripts/gameViewCmpt";
 import {eventMgt, EventName} from "db://assets/scripts/components/eventManager";
-import {ResLoadHelper} from "db://assets/scripts/components/resLoadHelper";
 
 export class GameBoardManager {
     private blockArr: Node[][] = [];
@@ -320,11 +318,8 @@ export class GameBoardManager {
                     //     resolve(false);
                     //     return;
                     // }
-                    let item = this.blockArr[i][j];
-                    if (!item || item.getComponent(gridCmpt).getMoveState()) continue;
-                    if (this.checkExist(item.getComponent(gridCmpt), samelist)) continue;
-                    let hor: gridCmpt[] = this._checkHorizontal(item.getComponent(gridCmpt));
-                    let ver: gridCmpt[] = this._checkVertical(item.getComponent(gridCmpt));
+                    let {result, hor, ver} = this.checkMatches(i, j, samelist);
+                    if (!result) continue;
                     if (hor.length >= 3 && ver.length >= 3) {
                         hor = hor.slice(1, hor.length);//将自己去掉一个（重复）
                         hor = hor.concat(ver);
@@ -336,13 +331,10 @@ export class GameBoardManager {
             //check if special 2x2 exist
             for (let i = 0; i < this.dimensions.H; i++) {
                 for (let j = 0; j < this.dimensions.V; j++) {
-                    let item = this.blockArr[i][j];
-                    if (!item || item.getComponent(gridCmpt).getMoveState()) continue;
-                    if (this.checkExist(item.getComponent(gridCmpt), samelist)) continue;
-                    let hor: gridCmpt[] = this._checkHorizontal(item.getComponent(gridCmpt));
-                    let ver: gridCmpt[] = this._checkVertical(item.getComponent(gridCmpt));
+                    let {result, hor, ver} = this.checkMatches(i, j, samelist);
+                    if (!result) continue;
                     if (hor.length > 1 && hor.length <= 3 && ver.length > 1 && ver.length <= 3) {
-                        let center = item.getComponent(gridCmpt);
+                        let center = this.blockArr[i][j].getComponent(gridCmpt);
                         //check corner 4 direction
                         for (let k = 0; k < this.cornerPos.length; k++) {
                             let h = center.data.h + this.cornerPos[k][0];
@@ -386,11 +378,8 @@ export class GameBoardManager {
             }
             for (let i = 0; i < this.dimensions.H; i++) {
                 for (let j = 0; j < this.dimensions.V; j++) {
-                    let item = this.blockArr[i][j];
-                    if (!item || item.getComponent(gridCmpt).getMoveState()) continue;
-                    if (this.checkExist(item.getComponent(gridCmpt), samelist)) continue;
-                    let hor: gridCmpt[] = this._checkHorizontal(item.getComponent(gridCmpt));
-                    let ver: gridCmpt[] = this._checkVertical(item.getComponent(gridCmpt));
+                    let {result, hor, ver} = this.checkMatches(i, j, samelist);
+                    if (!result) continue;
                     if (hor.length >= 3) {
                         samelist.push(hor);
                     } else if (ver.length >= 3) {
@@ -403,6 +392,15 @@ export class GameBoardManager {
             let bool = !!samelist.length;
             resolve(bool);
         })
+    }
+
+    private checkMatches(i: number, j: number, sameList: any[]): {result: boolean, hor: gridCmpt[], ver: gridCmpt[]} {
+        let item = this.blockArr[i][j];
+        if (!item || item.getComponent(gridCmpt).getMoveState()) return {result: false, hor: null, ver: null};
+        if (this.checkExist(item.getComponent(gridCmpt), sameList)) return {result: false, hor: null, ver: null};
+        let hor: gridCmpt[] = this._checkHorizontal(item.getComponent(gridCmpt));
+        let ver: gridCmpt[] = this._checkVertical(item.getComponent(gridCmpt));
+        return {result: true, hor: hor, ver: ver};
     }
 
     private checkExist(item: gridCmpt, samelist: any[]) {
@@ -816,7 +814,7 @@ export class GameBoardManager {
     async checkAgain(isResult: boolean = false) {
         let bool = await this.startCheckThree();
         if (bool) {
-            await this.checkAgain(isResult);
+            this.checkAgain(isResult);
         }
         else {
             await CocosHelper.delayTime(.5);
